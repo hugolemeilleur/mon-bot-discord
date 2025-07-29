@@ -167,13 +167,13 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
+# === FONCTION PRINCIPALE POUR RENDER ===
+async def main():
+    async with bot:
+        news_loop.start()
+        await bot.start(TOKEN)
+
 # === LANCEMENT ===
 if __name__ == "__main__":
     keep_alive()
-
-    async def main():
-        async with bot:
-            news_loop.start()
-            await bot.start(TOKEN)
-
     asyncio.run(main())
