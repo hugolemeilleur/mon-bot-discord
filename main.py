@@ -7,7 +7,6 @@ import json
 from datetime import datetime
 from flask import Flask
 from threading import Thread
-import asyncio
 
 # === CONFIGURATION ===
 TOKEN = os.environ['DISCORD_TOKEN']
@@ -136,7 +135,7 @@ async def news_loop():
 
         embed = discord.Embed(
             title=post['title'],
-            description=description[:4096],  # Limite pour le embed
+            description=description[:4096],  # Limite Discord embed
             color=0x2F3136
         )
 
@@ -160,20 +159,15 @@ def home():
     return "Bot actif."
 
 def run():
-    port = int(os.environ.get("PORT", 8080))  # Prend le port donné par Render sinon 8080
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
 def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# === FONCTION PRINCIPALE POUR RENDER ===
-async def main():
-    async with bot:
-        news_loop.start()
-        await bot.start(TOKEN)
-
-# === LANCEMENT ===
+# === LANCEMENT DU BOT ===
 if __name__ == "__main__":
-    keep_alive()
-    asyncio.run(main())
+    keep_alive()               # Lance Flask dans un thread
+    news_loop.start()          # Démarre la tâche périodique de news
+    bot.run(TOKEN)             # Lance le bot Discord (bloquant)
