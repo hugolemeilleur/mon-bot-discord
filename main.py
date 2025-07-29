@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 from flask import Flask
 from threading import Thread
+import asyncio
 
 # === CONFIGURATION ===
 TOKEN = os.environ['DISCORD_TOKEN']
@@ -20,7 +21,6 @@ KEYWORDS = [
 ]
 POSTED_FILE = "posted.json"
 
-# === CHARGEMENT DES ARTICLES DÉJÀ POSTÉS ===
 def load_posted_articles():
     if os.path.exists(POSTED_FILE):
         with open(POSTED_FILE, "r") as f:
@@ -38,14 +38,20 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === STATUT DU BOT ===
-@bot.event
-async def on_ready():
-    await bot.change_presence(activity=discord.Streaming(
-        name="Foot Mercato 🔥",
-        url="https://twitch.tv/lecazinolive"
-    ))
-    print(f"{bot.user} est en ligne !")
+# === FLASK SERVER ===
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot actif."
+
+def run():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
 # === SCRAPING FOOTMERCATO ===
 def scrape_articles():
@@ -73,15 +79,12 @@ def scrape_articles():
             if not any(keyword in title_lower for keyword in KEYWORDS):
                 continue
 
-            # Scrap contenu article
             article_res = requests.get(link)
             article_soup = BeautifulSoup(article_res.text, 'html.parser')
 
-            # Résumé (sous le titre)
             summary_tag = article_soup.find('h2')
             summary = summary_tag.text.strip() if summary_tag else ""
 
-            # Texte complet
             paragraphs = article_soup.find_all('p')
             full_text = "\n\n".join(p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20)
 
@@ -119,7 +122,6 @@ async def news_loop():
         posted_articles.add(post['link'])
         save_posted_articles(posted_articles)
 
-        # Préparer le texte complet avec mention rôle + réseaux
         role_mention = f"<@&{ROLE_ID}>"
         summary = post['summary']
         full_text = post['text']
@@ -135,7 +137,7 @@ async def news_loop():
 
         embed = discord.Embed(
             title=post['title'],
-            description=description[:4096],  # Limite Discord embed
+            description=description[:4096],
             color=0x2F3136
         )
 
@@ -151,23 +153,17 @@ async def news_loop():
         except Exception as e:
             print(f"[ERREUR ENVOI EMBED] {e}")
 
-# === FLASK POUR UPTIME ROBOT ===
-app = Flask('')
+# === ÉVÉNEMENT READY ===
+@bot.event
+async def on_ready():
+    await bot.change_presence(activity=discord.Streaming(
+        name="Foot Mercato 🔥",
+        url="https://twitch.tv/lecazinolive"
+    ))
+    print(f"{bot.user} est en ligne !")
+    news_loop.start()
 
-@app.route('/')
-def home():
-    return "Bot actif."
-
-def run():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# === LANCEMENT DU BOT ===
+# === LANCEMENT FINAL ===
 if __name__ == "__main__":
-    keep_alive()               # Lance Flask dans un thread
-    news_loop.start()          # Démarre la tâche périodique de news
-    bot.run(TOKEN)             # Lance le bot Discord (bloquant)
+    keep_alive()
+    bot.run(TOKEN)
